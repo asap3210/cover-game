@@ -1,0 +1,50 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar proyecto (descomprime el zip si hace falta)
+        run: |
+          set -e
+          if [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
+            PROJ="$PWD"
+          else
+            ZIP=$(find . -maxdepth 2 -iname '*.zip' -not -path './.git/*' | head -n1)
+            [ -n "$ZIP" ] || { echo "No hay proyecto ni .zip en el repo"; exit 1; }
+            echo "Usando $ZIP"
+            mkdir -p "$RUNNER_TEMP/proj"
+            unzip -q "$ZIP" -d "$RUNNER_TEMP/proj"
+            SG=$(find "$RUNNER_TEMP/proj" \( -name settings.gradle -o -name settings.gradle.kts \) -not -path '*/__MACOSX/*' | head -n1)
+            [ -n "$SG" ] || { echo "El zip no contiene settings.gradle"; exit 1; }
+            PROJ=$(dirname "$SG")
+          fi
+          echo "PROJ=$PROJ" >> "$GITHUB_ENV"
+          echo "Proyecto en: $PROJ"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Aceptar licencias del SDK de Android
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compilar APK debug
+        working-directory: ${{ env.PROJ }}
+        run: gradle assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: covergame-apk
+          path: ${{ env.PROJ }}/app/build/outputs/apk/debug/*.apk
