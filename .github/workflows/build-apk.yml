@@ -13,16 +13,19 @@ jobs:
       - name: Preparar proyecto (descomprime el zip si hace falta)
         run: |
           set -e
-          if [ -f settings.gradle ] || [ -f settings.gradle.kts ]; then
-            PROJ="$PWD"
+          echo "Archivos en el repo:"
+          find . -not -path './.git/*' -type f | head -50
+          SG=$(find . -not -path './.git/*' \( -name settings.gradle -o -name settings.gradle.kts \) | head -n1)
+          if [ -n "$SG" ]; then
+            PROJ=$(cd "$(dirname "$SG")" && pwd)
           else
-            ZIP=$(find . -maxdepth 2 -iname '*.zip' -not -path './.git/*' | head -n1)
-            [ -n "$ZIP" ] || { echo "No hay proyecto ni .zip en el repo"; exit 1; }
+            ZIP=$(find . -not -path './.git/*' -iname '*.zip' | head -n1)
+            [ -n "$ZIP" ] || { echo "ERROR: no hay proyecto ni .zip en el repo (mira la lista de arriba)"; exit 1; }
             echo "Usando $ZIP"
             mkdir -p "$RUNNER_TEMP/proj"
             unzip -q "$ZIP" -d "$RUNNER_TEMP/proj"
             SG=$(find "$RUNNER_TEMP/proj" \( -name settings.gradle -o -name settings.gradle.kts \) -not -path '*/__MACOSX/*' | head -n1)
-            [ -n "$SG" ] || { echo "El zip no contiene settings.gradle"; exit 1; }
+            [ -n "$SG" ] || { echo "ERROR: el zip no contiene settings.gradle"; exit 1; }
             PROJ=$(dirname "$SG")
           fi
           echo "PROJ=$PROJ" >> "$GITHUB_ENV"
